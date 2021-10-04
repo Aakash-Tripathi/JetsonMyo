@@ -5,6 +5,6 @@ This repo contains code from
 # Installation and Usage
 
 ```bash
-sudo chmod +x MyoConnect.sh
-./MyoConnect.sh
+$ sudo chmod +x MyoConnect.sh
+$ ./MyoConnect.sh
 ```
