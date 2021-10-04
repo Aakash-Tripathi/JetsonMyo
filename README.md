@@ -2,3 +2,9 @@
 
 This repo contains code from
 [Danny Zhu](https://github.com/dzhu/myo-raw), and provides a method for connecting the Myo Arm Band to devices running Ubuntu >= 20.04 LTS.
+# Installation and Usage
+
+```bash
+sudo chmod +x MyoConnect.sh
+./MyoConnect.sh
+```
