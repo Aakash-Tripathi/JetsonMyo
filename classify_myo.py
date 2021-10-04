@@ -61,7 +61,7 @@ if __name__ == '__main__':
                         if K_0 <= ev.key <= K_9:
                             hnd.recording = ev.key - K_0
                         elif K_KP0 <= ev.key <= K_KP9:
-                            hnd.recording = ev.key - K_Kp0
+                            hnd.recording = ev.key - K_KP0
                         elif ev.unicode == 'r':
                             hnd.cl.read_data()
                     elif ev.type == KEYUP:
