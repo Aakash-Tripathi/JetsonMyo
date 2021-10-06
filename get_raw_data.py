@@ -422,9 +422,28 @@ if __name__ == '__main__':
     m.add_arm_handler(lambda arm, xdir: print('arm', arm, 'xdir', xdir))
     m.add_pose_handler(lambda p: print('pose', p))
 
+    """
     try:
         while True:
             m.run(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        m.disconnect()
+        print()
+    """
+    ltime = time.time()  # Set initial lasttime for further timeout
+    timeout = 1  # Timeout in seconds
+
+    try:
+        while True:
+            if time.time() > (ltime + timeout):
+                print("Connection lost, try to reconnect")
+                m.connect()
+                ltime = time.time()  # Set lasttime for further timeout
+            else:
+                ltime = time.time()  # Set lasttime for further timeout
+                m.run()
     except KeyboardInterrupt:
         pass
     finally:
