@@ -1,16 +1,19 @@
-from __future__ import print_function
-
 import enum
 import re
 import struct
 import sys
 import threading
 import time
-
 import serial
 from serial.tools.list_ports import comports
 
-from common import *
+
+def pack(fmt, *args):
+    return struct.pack('<' + fmt, *args)
+
+
+def unpack(fmt, *args):
+    return struct.unpack('<' + fmt, *args)
 
 
 def multichr(ords):
@@ -87,16 +90,6 @@ class BT(object):
                 if ret.typ == 0x80:
                     self.handle_event(ret)
                 return ret
-
-    def recv_packets(self, timeout=.5):
-        res = []
-        t0 = time.time()
-        while time.time() < t0 + timeout:
-            p = self.recv_packet(t0 + timeout - time.time())
-            if not p:
-                return res
-            res.append(p)
-        return res
 
     def proc_byte(self, c):
         if not self.buf:
@@ -303,7 +296,7 @@ class MyoRaw(object):
                 gyro = vals[7:10]
                 self.on_imu(quat, acc, gyro)
             elif attr == 0x23:
-                typ, val, xdir = unpack('3B', pay)
+                typ, val, xdir = unpack('6B', pay)
 
                 if typ == 1:  # on arm
                     self.on_arm(Arm(val), XDirection(xdir))
@@ -411,57 +404,12 @@ class MyoRaw(object):
 
 
 if __name__ == '__main__':
-    try:
-        import pygame
-        from pygame.locals import *
-        HAVE_PYGAME = True
-    except ImportError:
-        HAVE_PYGAME = False
-
-    HAVE_PYGAME = False
-
-    if HAVE_PYGAME:
-        w, h = 1200, 400
-        scr = pygame.display.set_mode((w, h))
 
     last_vals = None
-
-    def plot(scr, vals):
-        DRAW_LINES = False
-
-        global last_vals
-        if last_vals is None:
-            last_vals = vals
-            return
-
-        D = 5
-        scr.scroll(-D)
-        scr.fill((0, 0, 0), (w - D, 0, w, h))
-        for i, (u, v) in enumerate(zip(last_vals, vals)):
-            if DRAW_LINES:
-                pygame.draw.line(scr, (0, 255, 0),
-                                 (w - D, int(h/8 * (i+1 - u))),
-                                 (w, int(h/8 * (i+1 - v))))
-                pygame.draw.line(scr, (255, 255, 255),
-                                 (w - D, int(h/8 * (i+1))),
-                                 (w, int(h/8 * (i+1))))
-            else:
-                c = int(255 * max(0, min(1, v)))
-                scr.fill((c, c, c), (w - D, i * h / 8,
-                         D, (i + 1) * h / 8 - i * h / 8))
-
-        pygame.display.flip()
-        last_vals = vals
-
     m = MyoRaw(sys.argv[1] if len(sys.argv) >= 2 else None)
 
     def proc_emg(emg, moving, times=[]):
-        if HAVE_PYGAME:
-            # update pygame display
-            plot(scr, [e / 2000. for e in emg])
-        else:
-            print(emg)
-
+        print(emg)
         # print framerate of received data
         times.append(time.time())
         if len(times) > 20:
@@ -477,17 +425,6 @@ if __name__ == '__main__':
     try:
         while True:
             m.run(1)
-
-            if HAVE_PYGAME:
-                for ev in pygame.event.get():
-                    if ev.type == QUIT or (ev.type == KEYDOWN and ev.unicode == 'q'):
-                        raise KeyboardInterrupt()
-                    elif ev.type == KEYDOWN:
-                        if K_1 <= ev.key <= K_3:
-                            m.vibrate(ev.key - K_0)
-                        if K_KP1 <= ev.key <= K_KP3:
-                            m.vibrate(ev.key - K_KP0)
-
     except KeyboardInterrupt:
         pass
     finally:

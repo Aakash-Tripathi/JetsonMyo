@@ -30,6 +30,7 @@ class NNClassifier(object):
     def store_data(self, cls, vals):
         with open('vals%d.dat' % cls, 'ab') as f:
             f.write(pack('8H', *vals))
+        f.close()
 
         self.train(np.vstack([self.X, vals]), np.hstack([self.Y, [cls]]))
 
