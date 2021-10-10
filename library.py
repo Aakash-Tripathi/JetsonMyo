@@ -41,15 +41,6 @@ def multiord(b):
         return map(ord, b)
 
 
-"""
-class emg_mode(enum.Enum):
-    NO_DATA = 0  # Do not send EMG data
-    PREPROCESSED = 1  # Sends 50Hz rectified and band pass filtered data
-    FILTERED = 2  # Sends 200Hz filtered but not rectified data
-    RAW = 3  # Sends raw 200Hz data from the ADC ranged between -128 and 127
-"""
-
-
 class Arm(enum.Enum):
     UNKNOWN = 0
     RIGHT = 1
@@ -111,21 +102,7 @@ class BT(object):
                     self.handle_event(ret)
                 return ret
 
-    """
-    # Original dzhu Code (Fails on windows)
-    def recv_packets(self, timeout=.5):
-        res = []
-        t0 = time.time()
-        while time.time() < t0 + timeout:
-            p = self.recv_packet(t0 + timeout - time.time())
-            if not p:
-                return res
-            res.append(p)
-        return res
-    """
-
     # internal data-handling methods
-    # Check if it Works on Linux
     def recv_packet(self, timeout=.5):
         n = self.ser.inWaiting()  # Windows fix
 
