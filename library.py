@@ -1,14 +1,6 @@
 """
 Original Author of this Library https://github.com/dzhu/myo-raw
 Modified by https://github.com/Aakash-Tripathi/
-
-Change Log:
-[1] Logging functionality
-[2] Removed Pygame GUI and removed all Non EMG Data 
-        -- Moved to logging
-[3] Automatic Reconnect upon BT Loss
-
-TODO: Make EMG Data accessible to Model for inference
 """
 
 import enum
@@ -21,8 +13,10 @@ import logging
 import serial
 from serial.tools.list_ports import comports
 
-logging.basicConfig(filename='logs/{}.log'.format(time.strftime("%Y%m%d-%H%M%S")),
-                    filemode='w', level=logging.DEBUG)
+logging.basicConfig(filename='logs/{}.log'.format(time.strftime("%Y-%m-%d")),
+                    filemode='a', level=logging.DEBUG, format='%(message)s')
+
+logging.info("\nStart Time \t\t " + time.strftime("%H:%M.%S"))
 
 
 def pack(fmt, *args):
@@ -45,6 +39,15 @@ def multiord(b):
         return list(b)
     else:
         return map(ord, b)
+
+
+"""
+class emg_mode(enum.Enum):
+    NO_DATA = 0  # Do not send EMG data
+    PREPROCESSED = 1  # Sends 50Hz rectified and band pass filtered data
+    FILTERED = 2  # Sends 200Hz filtered but not rectified data
+    RAW = 3  # Sends raw 200Hz data from the ADC ranged between -128 and 127
+"""
 
 
 class Arm(enum.Enum):
@@ -106,6 +109,40 @@ class BT(object):
             if ret:
                 if ret.typ == 0x80:
                     self.handle_event(ret)
+                return ret
+
+    """
+    # Original dzhu Code (Fails on windows)
+    def recv_packets(self, timeout=.5):
+        res = []
+        t0 = time.time()
+        while time.time() < t0 + timeout:
+            p = self.recv_packet(t0 + timeout - time.time())
+            if not p:
+                return res
+            res.append(p)
+        return res
+    """
+
+    # internal data-handling methods
+    # Check if it Works on Linux
+    def recv_packet(self, timeout=.5):
+        n = self.ser.inWaiting()  # Windows fix
+
+        while True:
+            c = self.ser.read()
+            if not c:
+                return None
+
+            ret = self.proc_byte(ord(c))
+            if ret:
+                if ret.typ == 0x80:
+                    self.handle_event(ret)
+                    # Windows fix
+                    if n >= 5096:
+                        print("Clearning", n)
+                        self.ser.flushInput()
+                    # End of Windows fix
                 return ret
 
     def proc_byte(self, c):
@@ -181,11 +218,9 @@ class BT(object):
 
         while True:
             p = self.recv_packet()
-
             # no timeout, so p won't be None
             if p.typ == 0:
                 return p
-
             # not a response: must be an event
             self.handle_event(p)
 
@@ -198,16 +233,16 @@ class MyoRaw(object):
             tty = self.detect_tty()
         if tty is None:
             raise ValueError('Myo dongle not found!')
+
         self.bt = BT(tty)
         self.conn = None
         self.emg_handlers = []
         self.imu_handlers = []
+        self.battery_handlers = []
 
     def detect_tty(self):
         for p in comports():
             if re.search(r'PID=2458:0*1', p[2]):
-                #print('using device:', p[0])
-                logging.info('using devive %s', p[0])
                 return p[0]
         return None
 
@@ -225,8 +260,6 @@ class MyoRaw(object):
         self.bt.discover()
         while True:
             p = self.bt.recv_packet()
-
-            # Uncomment this to see scan response
             # print('scan response:', p)
 
             if p.payload.endswith(b'\x06\x42\x48\x12\x4A\x7F\x2C\x48\x47\xB9\xDE\x04\xA9\x01\x00\x06\xD5'):
@@ -242,7 +275,8 @@ class MyoRaw(object):
         # get firmware version
         fw = self.read_attr(0x17)
         _, _, _, _, v0, v1, v2, v3 = unpack('BHBBHHHH', fw.payload)
-        logging.info('firmware version %d.%d.%d.%d', v0, v1, v2, v3)
+        logging.info('firmware \t\t %d.%d.%d.%d', v0, v1, v2, v3)
+        logging.info("Connected \t\t " + time.strftime("%H:%M.%S"))
 
         self.old = (v0 == 0)
 
@@ -278,10 +312,6 @@ class MyoRaw(object):
 
         else:
             name = self.read_attr(0x03)
-            # LOG THIS
-            logging.info('device name: %s', name.payload)
-            #print('device name: %s' % name.payload)
-
             # enable IMU data
             self.write_attr(0x1d, b'\x01\x00')
             # enable on/off arm notifications
@@ -289,6 +319,9 @@ class MyoRaw(object):
 
             # self.write_attr(0x19, b'\x01\x03\x00\x01\x01')
             self.start_raw()
+
+            # enable battery notifications
+            self.write_attr(0x12, b'\x01\x10')
 
         # add data handlers
         def handle_data(p):
@@ -306,6 +339,7 @@ class MyoRaw(object):
                 emg = vals[:8]
                 moving = vals[8]
                 self.on_emg(emg, moving)
+            # Read IMU characteristic handle
             elif attr == 0x1c:
                 vals = unpack('10h', pay)
                 quat = vals[:4]
@@ -327,6 +361,7 @@ class MyoRaw(object):
     def disconnect(self):
         if self.conn is not None:
             self.bt.disconnect(self.conn)
+        logging.info("Disconnected \t " + time.strftime("%H:%M.%S"))
 
     def start_raw(self):
         '''Sending this sequence for v1.0 firmware seems to enable both raw data and
@@ -376,15 +411,25 @@ class MyoRaw(object):
         self.write_attr(0x19, b'\x01\x03\x01\x01\x01')
 
     def vibrate(self, length):
-        if length in xrange(1, 4):
+        if length in range(1, 4):
             # first byte tells it to vibrate; purpose of second byte is unknown
             self.write_attr(0x19, pack('3B', 3, 1, length))
+
+    def set_leds(self, logo, line):
+        self.write_attr(0x19, pack('8B', 6, 6, *(logo + line)))
+
+    def get_battery_level(self):
+        battery_level = self.read_attr(0x11)
+        return ord(battery_level.payload[5])
 
     def add_emg_handler(self, h):
         self.emg_handlers.append(h)
 
     def add_imu_handler(self, h):
         self.imu_handlers.append(h)
+
+    def add_battery_handler(self, h):
+        self.battery_handlers.append(h)
 
     def on_emg(self, emg, moving):
         for h in self.emg_handlers:
@@ -401,3 +446,7 @@ class MyoRaw(object):
     def on_arm(self, arm, xdir):
         for h in self.arm_handlers:
             h(arm, xdir)
+
+    def on_battery(self, battery_level):
+        for h in self.battery_handlers:
+            h(battery_level)
