@@ -1,9 +1,10 @@
+import multiprocessing
 from collections import Counter, deque
 
 import pygame
 from pygame.locals import *
 import numpy as np
-
+from servo import move_servo
 from library import *
 
 SUBSAMPLE = 3
@@ -39,8 +40,6 @@ class Classifier(object):
     def train(self, X, Y):
         self.X = X
         self.Y = Y
-        print("X", X)
-        print("Y", Y)
         self.nn = None
 
     def nearest(self, d):
@@ -114,56 +113,58 @@ class EMGHandler(object):
             self.m.cls.store_data(self.recording, emg)
 
 
-if __name__ == '__main__':
-    pygame.init()
-    w, h = 800, 320
-    scr = pygame.display.set_mode((w, h))
-    font = pygame.font.Font(None, 30)
-
+def worker(q):
     m = MyoClassifier(Classifier())
     hnd = EMGHandler(m)
     m.add_emg_handler(hnd)
     m.connect()
 
-    m.add_raw_pose_handler(print)
+    pygame.init()
+    w, h = 800, 320
+    scr = pygame.display.set_mode((w, h))
+    font = pygame.font.Font(None, 30)
 
-    m.set_leds([0, 255, 0], [0, 0, 0])
+    def proc_pose(h):
+        q.put(h)
+    # m.add_raw_pose_handler(print)
+    m.add_raw_pose_handler(proc_pose)
 
+    ltime = time.time()
     try:
         while True:
-            m.run()
-            r = m.history_cnt.most_common(1)[0][0]
-            for ev in pygame.event.get():
-                if ev.type == QUIT or (ev.type == KEYDOWN and ev.unicode == 'q'):
-                    raise KeyboardInterrupt()
-                elif ev.type == KEYDOWN:
-                    if K_0 <= ev.key <= K_9:
-                        hnd.recording = ev.key - K_0
-                    elif K_KP0 <= ev.key <= K_KP9:
-                        hnd.recording = ev.key - K_Kp0
-                    elif ev.unicode == 'r':
-                        hnd.cl.read_data()
-                elif ev.type == KEYUP:
-                    if K_0 <= ev.key <= K_9 or K_KP0 <= ev.key <= K_KP9:
-                        hnd.recording = -1
+            if time.time() > (ltime + 1):
+                m.connect()
+                ltime = time.time()
+            else:
+                ltime = time.time()
+                m.run()
+                r = m.history_cnt.most_common(1)[0][0]
+                for ev in pygame.event.get():
+                    if ev.type == QUIT or (ev.type == KEYDOWN and ev.unicode == 'q'):
+                        raise KeyboardInterrupt()
+                    elif ev.type == KEYDOWN:
+                        if K_0 <= ev.key <= K_9:
+                            hnd.recording = ev.key - K_0
+                        elif K_KP0 <= ev.key <= K_KP9:
+                            hnd.recording = ev.key - K_Kp0
 
-            scr.fill((0, 0, 0), (0, 0, w, h))
+                scr.fill((0, 0, 0), (0, 0, w, h))
 
-            for i in range(10):
-                x = 0
-                y = 0 + 30 * i
-                clr = (0, 200, 0) if i == r else (255, 255, 255)
-                txt = font.render('%5d' % (m.cls.Y == i).sum(),
-                                  True, (255, 255, 255))
-                scr.blit(txt, (x + 20, y))
-                txt = font.render('%d' % i, True, clr)
-                scr.blit(txt, (x + 110, y))
-                scr.fill((0, 0, 0), (x+130, y + txt.get_height() /
-                         2 - 10, len(m.history) * 20, 20))
-                scr.fill(clr, (x+130, y + txt.get_height() /
-                         2 - 10, m.history_cnt[i] * 20, 20))
+                for i in range(10):
+                    x = 0
+                    y = 0 + 30 * i
+                    clr = (0, 200, 0) if i == r else (255, 255, 255)
+                    txt = font.render('%5d' % (m.cls.Y == i).sum(),
+                                      True, (255, 255, 255))
+                    scr.blit(txt, (x + 20, y))
+                    txt = font.render('%d' % i, True, clr)
+                    scr.blit(txt, (x + 110, y))
+                    scr.fill((0, 0, 0), (x+130, y + txt.get_height() /
+                                         2 - 10, len(m.history) * 20, 20))
+                    scr.fill(clr, (x+130, y + txt.get_height() /
+                                   2 - 10, m.history_cnt[i] * 20, 20))
 
-            pygame.display.flip()
+                pygame.display.flip()
 
     except KeyboardInterrupt:
         pass
@@ -171,3 +172,18 @@ if __name__ == '__main__':
         m.disconnect()
         print()
         pygame.quit()
+
+
+if __name__ == '__main__':
+
+    q = multiprocessing.Queue()
+    p = multiprocessing.Process(target=worker, args=(q,))
+    p.start()
+
+    try:
+        while True:
+            while not(q.empty()):
+                emg = q.get()
+                move_servo(emg)
+    except KeyboardInterrupt:
+        quit()
