@@ -10,6 +10,12 @@ from library import *
 SUBSAMPLE = 3
 K = 15
 
+"""
+[] Keypress is broken - When pressed it stay pressed and keeps recording
+[] Classifier.read_data() has functionality to read .data files
+    [] Use this to get hand pose data
+"""
+
 
 class Classifier(object):
     '''A wrapper for nearest-neighbor classifier that stores
@@ -146,7 +152,7 @@ def worker(q):
                         if K_0 <= ev.key <= K_9:
                             hnd.recording = ev.key - K_0
                         elif K_KP0 <= ev.key <= K_KP9:
-                            hnd.recording = ev.key - K_Kp0
+                            hnd.recording = ev.key - K_KP0
 
                 scr.fill((0, 0, 0), (0, 0, w, h))
 
