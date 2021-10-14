@@ -1,5 +1,6 @@
 import multiprocessing
-from library import *
+import time
+from myo import MyoRaw
 
 
 def worker(q):

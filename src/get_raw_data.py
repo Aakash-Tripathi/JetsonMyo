@@ -1,6 +1,6 @@
+import sys
 import time
-from library import *
-
+from myo import MyoRaw
 
 if __name__ == '__main__':
     emg_data = []
