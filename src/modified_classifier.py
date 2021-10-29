@@ -1,46 +1,43 @@
-import multiprocessing
 from collections import Counter, deque
 import struct
 import pygame
 from pygame.locals import *
 import numpy as np
 from myo import MyoRaw
-
-SUBSAMPLE = 3
-K = 15
+import os
+import math
+import tensorflow as tf
 
 
 class ModifiedClassifier(object):
-    def __init__(self, model_path):
-        """
-        Initialize the classifier
-        """
-        self.model = None
-        self.model_path = model_path
-        self.load_model()
-
-    def load_model(self):
-        """
-        Load the model
-        """
-        self.model = np.load(self.model_path)
-
-    def predict(self, data):
-        """
-        Predict the gesture
-        """
-        return self.model.predict(data)
-
-
-class Classifier(object):
-    '''A wrapper for nearest-neighbor classifier that stores
-    training data in vals0, ..., vals9.dat.'''
-
     def __init__(self):
+        """Initialize the classifier"""
+        self.model = None
+        self.model_path = os.getcwd() + '/models/Trained.h5'
         for i in range(10):
             with open('data/vals%d.dat' % i, 'ab') as f:
                 pass
         self.read_data()
+        self.load_model()
+
+    def preprocess(self,  data, labels, gesture_window=40, rms_window=10):
+        step = int(rms_window/2)
+        rms_len = int((gesture_window/step)-1)
+        gesture_count = int(data.shape[0]/gesture_window)
+        features = np.zeros((gesture_count, rms_len, 8))
+        ft_labels = np.zeros(gesture_count)
+        for g in range(gesture_count):
+            for i in range(8):  # For each channel
+                for j in range(rms_len):  # for each window
+                    features[g, j, i] = self.calc_rms(
+                        data[(j*step):(j*step + rms_window), i], rms_window)
+            ft_labels[g] = np.rint(
+                np.sum(labels[(g*gesture_window):((g+1)*gesture_window)])/gesture_window)
+        return features, ft_labels
+
+    def calc_rms(self, data, window):
+        sq_sum = np.sum(np.power(data, 2))
+        return math.sqrt(sq_sum/window)
 
     def store_data(self, cls, vals):
         with open('data/vals%d.dat' % cls, 'ab') as f:
@@ -55,23 +52,23 @@ class Classifier(object):
             X.append(np.fromfile('data/vals%d.dat' %
                      i, dtype=np.uint16).reshape((-1, 8)))
             Y.append(i + np.zeros(X[-1].shape[0]))
-
         self.train(np.vstack(X), np.hstack(Y))
 
     def train(self, X, Y):
-        self.X = X
-        self.Y = Y
-        self.nn = None
+        features, ft_labels = self.preprocess(X, Y)
+        self.X = features
+        self.Y = ft_labels
 
-    def nearest(self, d):
-        dists = ((self.X - d)**2).sum(1)
-        ind = dists.argmin()
-        return self.Y[ind]
+    def load_model(self):
+        """Load the model"""
+        self.model = tf.keras.models.load_model(self.model_path)
 
     def classify(self, d):
-        if self.X.shape[0] < K * SUBSAMPLE:
-            return 0
-        return self.nearest(d)
+        """Make the classification using the model"""
+        print("Data input for model prediction", d, "\n")
+        pred = self.model.predict(d)
+        print("\n prediction\n", pred, "\n")
+        return pred
 
 
 class MyoClassifier(MyoRaw):
@@ -140,7 +137,7 @@ if __name__ == '__main__':
     scr = pygame.display.set_mode((w, h))
     font = pygame.font.Font(None, 30)
 
-    m = MyoClassifier(Classifier())
+    m = MyoClassifier(ModifiedClassifier())
     hnd = EMGHandler(m)
     m.add_emg_handler(hnd)
     m.connect()
@@ -160,7 +157,7 @@ if __name__ == '__main__':
                     if K_0 <= ev.key <= K_9:
                         hnd.recording = ev.key - K_0
                     elif K_KP0 <= ev.key <= K_KP9:
-                        hnd.recording = ev.key - K_Kp0
+                        hnd.recording = ev.key - K_KP0
                     elif ev.unicode == 'r':
                         hnd.cl.read_data()
                 elif ev.type == KEYUP:
