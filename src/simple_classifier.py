@@ -33,7 +33,6 @@ class Classifier(object):
             X.append(np.fromfile('data/vals%d.dat' %
                      i, dtype=np.uint16).reshape((-1, 8)))
             Y.append(i + np.zeros(X[-1].shape[0]))
-
         self.train(np.vstack(X), np.hstack(Y))
 
     def train(self, X, Y):
@@ -70,6 +69,7 @@ class MyoClassifier(MyoRaw):
         self.pose_handlers = []
 
     def emg_handler(self, emg, moving):
+        emg = np.array(emg)
         y = self.cls.classify(emg)
         self.history_cnt[self.history[0]] -= 1
         self.history_cnt[y] += 1

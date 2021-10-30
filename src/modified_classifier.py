@@ -1,43 +1,23 @@
+import multiprocessing
 from collections import Counter, deque
 import struct
 import pygame
 from pygame.locals import *
 import numpy as np
-from myo import MyoRaw
 import os
-import math
+from myo import MyoRaw
 import tensorflow as tf
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
-class ModifiedClassifier(object):
+class Classifier(object):
     def __init__(self):
-        """Initialize the classifier"""
-        self.model = None
-        self.model_path = os.getcwd() + '/models/Trained.h5'
         for i in range(10):
             with open('data/vals%d.dat' % i, 'ab') as f:
                 pass
         self.read_data()
         self.load_model()
-
-    def preprocess(self,  data, labels, gesture_window=40, rms_window=10):
-        step = int(rms_window/2)
-        rms_len = int((gesture_window/step)-1)
-        gesture_count = int(data.shape[0]/gesture_window)
-        features = np.zeros((gesture_count, rms_len, 8))
-        ft_labels = np.zeros(gesture_count)
-        for g in range(gesture_count):
-            for i in range(8):  # For each channel
-                for j in range(rms_len):  # for each window
-                    features[g, j, i] = self.calc_rms(
-                        data[(j*step):(j*step + rms_window), i], rms_window)
-            ft_labels[g] = np.rint(
-                np.sum(labels[(g*gesture_window):((g+1)*gesture_window)])/gesture_window)
-        return features, ft_labels
-
-    def calc_rms(self, data, window):
-        sq_sum = np.sum(np.power(data, 2))
-        return math.sqrt(sq_sum/window)
 
     def store_data(self, cls, vals):
         with open('data/vals%d.dat' % cls, 'ab') as f:
@@ -55,20 +35,18 @@ class ModifiedClassifier(object):
         self.train(np.vstack(X), np.hstack(Y))
 
     def train(self, X, Y):
-        features, ft_labels = self.preprocess(X, Y)
-        self.X = features
-        self.Y = ft_labels
+        self.X = X
+        self.Y = Y
 
     def load_model(self):
-        """Load the model"""
-        self.model = tf.keras.models.load_model(self.model_path)
+        self.model = tf.keras.models.load_model(
+            os.getcwd()+'/models/Trained.h5')
+        self.model.summary()
 
     def classify(self, d):
-        """Make the classification using the model"""
-        print("Data input for model prediction", d, "\n")
-        pred = self.model.predict(d)
-        print("\n prediction\n", pred, "\n")
-        return pred
+        classification = np.argmax(self.model.predict(d))
+        print(classification)
+        return classification
 
 
 class MyoClassifier(MyoRaw):
@@ -79,16 +57,18 @@ class MyoClassifier(MyoRaw):
     def __init__(self, cls, tty=None):
         MyoRaw.__init__(self, tty)
         self.cls = cls
-
         self.history = deque([0] * MyoClassifier.HIST_LEN,
                              MyoClassifier.HIST_LEN)
         self.history_cnt = Counter(self.history)
         self.add_emg_handler(self.emg_handler)
         self.last_pose = None
-
         self.pose_handlers = []
 
     def emg_handler(self, emg, moving):
+        emg = np.array([emg])
+        emg = np.concatenate((emg, emg, emg, emg, emg, emg, emg))
+        emg = emg.reshape((1, emg.shape[0], emg.shape[1]))
+
         y = self.cls.classify(emg)
         self.history_cnt[self.history[0]] -= 1
         self.history_cnt[y] += 1
@@ -105,6 +85,27 @@ class MyoClassifier(MyoRaw):
     def on_raw_pose(self, pose):
         for h in self.pose_handlers:
             h(pose)
+
+
+def preprocess(self,  data, labels, gesture_window=40, rms_window=10):
+    step = int(rms_window/2)
+    rms_len = int((gesture_window/step)-1)
+    gesture_count = int(data.shape[0]/gesture_window)
+    features = np.zeros((gesture_count, rms_len, 8))
+    ft_labels = np.zeros(gesture_count)
+    for g in range(gesture_count):
+        for i in range(8):  # For each channel
+            for j in range(rms_len):  # for each window
+                features[g, j, i] = self.calc_rms(
+                    data[(j*step):(j*step + rms_window), i], rms_window)
+        ft_labels[g] = np.rint(
+            np.sum(labels[(g*gesture_window):((g+1)*gesture_window)])/gesture_window)
+    return features, ft_labels
+
+
+def calc_rms(self, data, window):
+    sq_sum = np.sum(np.power(data, 2))
+    return math.sqrt(sq_sum/window)
 
 
 def pack(fmt, *args):
@@ -137,7 +138,7 @@ if __name__ == '__main__':
     scr = pygame.display.set_mode((w, h))
     font = pygame.font.Font(None, 30)
 
-    m = MyoClassifier(ModifiedClassifier())
+    m = MyoClassifier(Classifier())
     hnd = EMGHandler(m)
     m.add_emg_handler(hnd)
     m.connect()
