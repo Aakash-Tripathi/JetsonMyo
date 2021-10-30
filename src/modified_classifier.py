@@ -11,6 +11,12 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
+"""
+!Modified Classifier is using *UNPROCESSED* data from Myo Armband
+TODO: Send Processed data to the classifier 
+"""
+
+
 class Classifier(object):
     def __init__(self):
         for i in range(10):
