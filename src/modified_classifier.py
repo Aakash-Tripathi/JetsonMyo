@@ -173,8 +173,8 @@ if __name__ == '__main__':
 
             scr.fill((0, 0, 0), (0, 0, w, h))
 
+            x = 0
             for i in range(10):
-                x = 0
                 y = 0 + 30 * i
                 clr = (0, 200, 0) if i == r else (255, 255, 255)
                 txt = font.render('%5d' % (m.cls.Y == i).sum(),
