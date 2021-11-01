@@ -345,9 +345,9 @@ class MyoRaw(object):
         pose notifications.
         '''
 
-        self.write_attr(0x28, b'\x01\x00')
-        self.write_attr(0x19, b'\x01\x03\x01\x01\x00')
-        self.write_attr(0x19, b'\x01\x03\x01\x01\x01')
+        self._extracted_from_mc_end_collection_4(
+            0x19, b'\x01\x03\x01\x01\x00', 0x19, b'\x01\x03\x01\x01\x01'
+        )
 
     def mc_start_collection(self):
         '''Myo Connect sends this sequence (or a reordering) when starting data
@@ -355,9 +355,8 @@ class MyoRaw(object):
         pose notifications.
         '''
 
-        self.write_attr(0x28, b'\x01\x00')
-        self.write_attr(0x1d, b'\x01\x00')
-        self.write_attr(0x24, b'\x02\x00')
+        self._extracted_from_mc_end_collection_4(
+            0x1d, b'\x01\x00', 0x24, b'\x02\x00')
         self.write_attr(0x19, b'\x01\x03\x01\x01\x01')
         self.write_attr(0x28, b'\x01\x00')
         self.write_attr(0x1d, b'\x01\x00')
@@ -374,9 +373,8 @@ class MyoRaw(object):
         doesn't disable raw data.
         '''
 
-        self.write_attr(0x28, b'\x01\x00')
-        self.write_attr(0x1d, b'\x01\x00')
-        self.write_attr(0x24, b'\x02\x00')
+        self._extracted_from_mc_end_collection_4(
+            0x1d, b'\x01\x00', 0x24, b'\x02\x00')
         self.write_attr(0x19, b'\x01\x03\x01\x01\x01')
         self.write_attr(0x19, b'\x09\x01\x00\x00\x00')
         self.write_attr(0x1d, b'\x01\x00')
@@ -386,6 +384,12 @@ class MyoRaw(object):
         self.write_attr(0x1d, b'\x01\x00')
         self.write_attr(0x24, b'\x02\x00')
         self.write_attr(0x19, b'\x01\x03\x01\x01\x01')
+
+    # TODO Rename this here and in `start_raw`, `mc_start_collection` and `mc_end_collection`
+    def _extracted_from_mc_end_collection_4(self, arg0, arg1, arg2, arg3):
+        self.write_attr(40, b'\x01\x00')
+        self.write_attr(arg0, arg1)
+        self.write_attr(arg2, arg3)
 
     def vibrate(self, length):
         if length in range(1, 4):
