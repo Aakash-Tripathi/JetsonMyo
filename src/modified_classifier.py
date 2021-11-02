@@ -5,6 +5,7 @@ import pygame
 from pygame.locals import *
 import numpy as np
 import os
+import math
 from myo import MyoRaw
 import tensorflow as tf
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
