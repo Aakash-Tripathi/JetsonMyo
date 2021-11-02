@@ -8,9 +8,8 @@ import os
 import math
 from myo import MyoRaw
 import tensorflow as tf
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
+#os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+#os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 """
 !Modified Classifier is using *UNPROCESSED* data from Myo Armband
